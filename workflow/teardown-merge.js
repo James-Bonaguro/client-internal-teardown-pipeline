@@ -13,26 +13,38 @@ const inputs = args ?? {};
 const target = inputs.target;
 const mine = inputs.mine;
 const gpt = inputs.gpt;
+const briefClient = inputs.client || "";
+const briefCustomer = inputs.target_customer || "";
+const briefMarket = inputs.market || "";
+const briefDecision = inputs.decision || "";
 
 if (!target || typeof target !== "string" || target.trim() === "" || !mine || !gpt) {
   return {
     __hatchWorkflowControl: "blocked",
     result: {
       blocked_reason: "missing_inputs",
-      message: "Launch with args { target: \"Business Name\", mine: \"markdown text of my teardown\", gpt: \"markdown text of GPT's teardown\" }."
+      message: "Launch with args { target: \"Business Name\", mine: \"markdown text of my teardown\", gpt: \"markdown text of GPT's teardown\", client/target_customer/market/decision optional }."
     }
   };
 }
 
-const STYLE = "House rules for everything you write: never mention AI, language models, or automation as the method. Never mention pricing. Write in real, complete sentences, no fragments. Keep formatting plain and scannable markdown. Tone is fun and peer-to-peer, never salesy.";
+const BRIEF = "Shared brief. Client this report serves: " + (briefClient || "not specified") +
+  ". Target customer: " + (briefCustomer || "not specified") +
+  ". Market: " + (briefMarket || "not specified") +
+  ". Decision this report should support: " + (briefDecision || "not specified") + ".";
+
+const STYLE = "House rules for everything you write: never mention AI, language models, or automation as the method. Never mention our service fees or pricing. Relevant, verified, published competitor prices may be cited as evidence; never use speculative price estimates. Write in real, complete sentences, no fragments. Keep formatting plain and scannable markdown. Tone is fun and peer-to-peer, never salesy.";
+
+const RUBRIC = "Merge rubric, follow it exactly: (1) keep the claim with the stronger evidence, never the longer or more polished version; (2) remove duplicates so each insight appears once; (3) build one coherent argument, not a grab bag of every interesting idea; (4) where conflicting evidence cannot be resolved, say so plainly and preserve the uncertainty; (5) every recommendation must fit what the brief's client can actually deliver; (6) agreement between the two versions never counts as corroboration.";
 
 phase("merge");
 log("Merging the two teardowns for: " + target);
 await agent(
   "You are the teardown editor. Below are two independent teardowns of the same business, \"" + target + "\". " +
-  "Version A is the first teardown. Version B is the second teardown. Produce ONE combined teardown that keeps the best of both: the strongest insights, the most specific evidence, the clearest explanations. " +
-  "Where the versions conflict, keep the better-supported claim and note the disagreement in one sentence. Where one version has material the other lacks, fold it in. Do not invent new facts. " +
-  "Structure it exactly: 1) What this is (one short paragraph), 2) How they win customers, 3) Weaknesses and gaps, 4) The single biggest opening, 5) What to do next (three concrete moves). " +
+  BRIEF + " " +
+  "Produce ONE combined teardown that keeps the best of both: the strongest insights, the most specific evidence, the clearest explanations. " +
+  RUBRIC + " " +
+  "Structure it exactly: 1) What this is (one short paragraph), 2) How they win customers, 3) Weaknesses and gaps, 4) The single biggest opening, 5) What to do next (three concrete moves), 6) Evidence appendix: every important claim with its source link and observation date, each labeled observed, inferred, or unknown. " +
   STYLE + " Save the result as \"teardown-merged.md\" in the working directory. Return the word done and nothing else.\n\n--- VERSION A ---\n" + mine + "\n\n--- VERSION B ---\n" + gpt,
   { key: "merge-1", label: "Merge both teardowns", timeoutMs: 600000 }
 );
@@ -50,7 +62,7 @@ const auditSchema = {
 };
 log("Auditing merged teardown.");
 const audit = await agent(
-  "You are the teardown auditor. Read \"teardown-merged.md\" in the working directory. Check for: factual holes, claims not supported by either source version, missing obvious angles, confusing structure, any mention of AI or pricing (both are forbidden). " +
+  "You are the teardown auditor. Read \"teardown-merged.md\" in the working directory. Check: every important claim has a source link and observation date; inferred and unknown items are labeled; unresolved conflicts are stated plainly rather than papered over; recommendations follow from the evidence and fit what the brief's client can actually deliver; no claim rests on version agreement as corroboration; any mention of AI or of our service fees (both forbidden; verified published competitor prices are allowed). " +
   "Return JSON with: passed (boolean), retryable (boolean, false only if the draft is unfixable), feedback (string describing exactly what to fix), blockers (string, anything unfixable).",
   { key: "audit-1", label: "Audit merged teardown", schema: auditSchema, timeoutMs: 300000 }
 );
@@ -77,7 +89,8 @@ const ownerSchema = {
   }
 };
 const owner = await agent(
-  "You are a busy small-business owner reading \"teardown-merged.md\" cold. Flag anything confusing, jargon-heavy, or hard to follow. " +
+  "You are a busy small-business owner reading \"teardown-merged.md\" cold. This is a CLARITY check only: does the report explain the opening and make the next move obvious? Flag anything confusing, jargon-heavy, or hard to follow. " +
+  "This does not establish whether a real owner would find the advice useful; that gets tested with a real owner later. " +
   "Return JSON with: clear (boolean), confusing_parts (string), most_valuable (string describing the single most valuable insight).",
   { key: "owner-review-1", label: "Business-owner clarity check", schema: ownerSchema, timeoutMs: 300000 }
 );
